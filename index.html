@@ -26,9 +26,9 @@
 
     <div class="container">
         <h2>📚 Comparador de eBooks Inteligente</h2>
-        <p>Busque por título ou autor para comparar os preços do Kindle (BR vs EUA)</p>
+        <p>Busque pelo nome, autor ou cole o código ASIN do Kindle</p>
         
-        <input type="text" id="termoBusca" placeholder="Ex: George Orwell 1984">
+        <input type="text" id="termoBusca" placeholder="Ex: Hábitos Atômicos ou B07VWK2415">
         <button onclick="buscarLista()">Buscar Livros</button>
 
         <div id="status"></div>
@@ -43,10 +43,21 @@
         const vitrineDiv = document.getElementById('vitrine');
         const resultadoDiv = document.getElementById('area-resultado');
 
-        // ETAPA 1: Busca e exibe as capas
+        // ETAPA 1: Busca inteligente (Nome ou ASIN)
         async function buscarLista() {
-            const termo = document.getElementById('termoBusca').value;
+            // Remove espaços extras antes ou depois do texto
+            const termo = document.getElementById('termoBusca').value.trim();
             if (!termo) return;
+
+            // VERIFICAÇÃO INTELIGENTE: É um ASIN? (10 letras/números seguidos)
+            const ehAsin = /^[A-Z0-9]{10}$/i.test(termo);
+            if (ehAsin) {
+                // Pula a vitrine e vai direto para a comparação de preços
+                vitrineDiv.innerHTML = "";
+                resultadoDiv.innerHTML = "";
+                compararPrecos(termo.toUpperCase(), `Pesquisa direta via ASIN: ${termo.toUpperCase()}`);
+                return; 
+            }
 
             statusDiv.innerHTML = "⏳ Procurando capas na Amazon...";
             vitrineDiv.innerHTML = "";
@@ -56,7 +67,6 @@
                 const resposta = await fetch(`/api/buscar?q=${encodeURIComponent(termo)}`);
                 const dados = await resposta.json();
 
-                // NOVA VERIFICAÇÃO DETETIVE
                 if (dados.erro) {
                     statusDiv.innerHTML = `<span style='color: orange;'>⚠️ ${dados.erro}</span>`;
                     return;
@@ -68,11 +78,9 @@
 
                 statusDiv.innerHTML = "Clique na capa do livro para comparar os preços:";
                 
-                // Cria um cartão para cada livro encontrado
                 dados.forEach(livro => {
                     const cartao = document.createElement('div');
                     cartao.className = 'cartao-livro';
-                    // Ao clicar na capa, aciona a função de comparar usando o ASIN
                     cartao.onclick = () => compararPrecos(livro.asin, livro.titulo);
                     
                     cartao.innerHTML = `
