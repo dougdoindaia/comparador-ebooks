@@ -56,7 +56,12 @@
                 const resposta = await fetch(`/api/buscar?q=${encodeURIComponent(termo)}`);
                 const dados = await resposta.json();
 
-                if (dados.erro || dados.length === 0) {
+                // NOVA VERIFICAÇÃO DETETIVE
+                if (dados.erro) {
+                    statusDiv.innerHTML = `<span style='color: orange;'>⚠️ ${dados.erro}</span>`;
+                    return;
+                }
+                if (dados.length === 0) {
                     statusDiv.innerHTML = "<span style='color: red;'>Nenhum livro digital encontrado.</span>";
                     return;
                 }
@@ -67,11 +72,11 @@
                 dados.forEach(livro => {
                     const cartao = document.createElement('div');
                     cartao.className = 'cartao-livro';
-                    // Ao clicar na capa, ele aciona a função de comparar usando o ASIN e o Título
+                    // Ao clicar na capa, aciona a função de comparar usando o ASIN
                     cartao.onclick = () => compararPrecos(livro.asin, livro.titulo);
                     
                     cartao.innerHTML = `
-                        <img src="${livro.imagem}" alt="Capa">
+                        <img src="${livro.imagem}" alt="Capa do livro">
                         <h4>${livro.titulo}</h4>
                     `;
                     vitrineDiv.appendChild(cartao);
@@ -85,7 +90,7 @@
         // ETAPA 2: Compara os preços do livro selecionado
         async function compararPrecos(asin, titulo) {
             vitrineDiv.innerHTML = ""; // Esconde as capas
-            statusDiv.innerHTML = `⏳ Analisando os preços para: <b>${titulo}</b>... (Isso pode levar alguns segundos)`;
+            statusDiv.innerHTML = `⏳ Analisando os preços para: <b>${titulo}</b>...<br><span style="font-size: 0.8em; color: gray;">(Buscando nas lojas do Brasil e EUA)</span>`;
 
             try {
                 const resposta = await fetch(`/api/comparar?asin=${asin}&titulo=${encodeURIComponent(titulo)}`);
@@ -108,7 +113,7 @@
                             ✅ Compre na loja do: ${dados.mais_viavel}
                         </h2>
                     </div>
-                    <br><button onclick="document.getElementById('vitrine').innerHTML=''; document.getElementById('area-resultado').innerHTML=''; document.getElementById('status').innerHTML='';">Fazer Nova Busca</button>
+                    <br><button onclick="document.getElementById('termoBusca').value=''; document.getElementById('vitrine').innerHTML=''; document.getElementById('area-resultado').innerHTML=''; document.getElementById('status').innerHTML='';">Fazer Nova Busca</button>
                 `;
             } catch (erro) {
                 statusDiv.innerHTML = "<span style='color: red;'>Erro ao comparar os preços.</span>";

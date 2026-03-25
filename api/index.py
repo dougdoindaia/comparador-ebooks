@@ -5,6 +5,7 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
+# Sua chave da Rainforest API
 API_KEY = "E26F264275FD4B31B4D33F1646CC3889"
 
 # Rota 1: Traz a lista de livros e capas
@@ -26,19 +27,31 @@ def buscar_livros():
         resposta = requests.get('https://api.rainforestapi.com/request', params=params)
         dados = resposta.json()
         
+        # MODO DETETIVE: Se a API da Rainforest bloqueou o pedido (ex: limite de uso)
+        if 'request_info' in dados and dados['request_info'].get('success') == False:
+            mensagem = dados['request_info'].get('message', 'Erro desconhecido na API')
+            return jsonify({"erro": f"Rainforest recusou: {mensagem}"})
+
         resultados = []
-        # Pega os 6 primeiros resultados válidos
         if 'search_results' in dados:
-            for item in dados['search_results'][:6]:
+            for item in dados['search_results'][:6]: # Pega os 6 primeiros
                 if 'asin' in item and 'title' in item:
                     resultados.append({
                         'titulo': item['title'],
-                        'imagem': item.get('image', ''), # Pega a URL da capa
+                        'imagem': item.get('image', ''), 
                         'asin': item['asin']
                     })
-        return jsonify(resultados)
+            
+            # Se achou produtos, mas nenhum tinha o código ASIN
+            if len(resultados) == 0:
+                return jsonify({"erro": "A Amazon retornou produtos, mas nenhum possuía o código ASIN."})
+                
+            return jsonify(resultados)
+        else:
+            return jsonify({"erro": "A API não devolveu a lista de resultados (search_results ausente)."})
+            
     except Exception as e:
-        return jsonify({"erro": "Falha ao buscar os livros."}), 500
+        return jsonify({"erro": f"Falha no servidor Python: {str(e)}"}), 500
 
 # Função auxiliar para buscar o preço do produto exato (pelo ASIN)
 def buscar_preco_por_asin(asin, dominio):
@@ -54,7 +67,8 @@ def buscar_preco_por_asin(asin, dominio):
             if 'price' in dados['product']['buybox_winner']:
                 return dados['product']['buybox_winner']['price']['value']
         return None
-    except: return None
+    except: 
+        return None
 
 # Rota 2: Compara os preços do livro selecionado
 @app.route('/api/comparar', methods=['GET'])
@@ -65,20 +79,22 @@ def comparar():
     if not asin:
         return jsonify({"erro": "ASIN não fornecido"}), 400
 
-    # 1. Cotação
+    # 1. Cotação do Dólar
     try:
-        cotacao = requests.get("https://api.exchangerate-api.com/v4/latest/USD").json()['rates']['BRL']
+        url_moeda = "https://api.exchangerate-api.com/v4/latest/USD"
+        resposta_moeda = requests.get(url_moeda)
+        cotacao = resposta_moeda.json()['rates']['BRL']
     except:
-        cotacao = 5.00
+        cotacao = 5.00 # Valor de segurança
 
-    # 2. Busca preços exatos
+    # 2. Busca preços exatos nas duas lojas
     preco_br = buscar_preco_por_asin(asin, 'amazon.com.br')
     preco_us_dolar = buscar_preco_por_asin(asin, 'amazon.com')
     
     if preco_br is None or preco_us_dolar is None:
-        return jsonify({"erro": "Não foi possível encontrar o preço digital nas duas lojas."})
+        return jsonify({"erro": "Não foi possível encontrar o preço da versão digital nas duas lojas para este ASIN."})
     
-    # 3. Matemática
+    # 3. Matemática (adicionando ~5% de taxas para compra internacional)
     preco_us_convertido = (preco_us_dolar * cotacao) * 1.05
     mais_barato = "Brasil" if preco_br <= preco_us_convertido else "EUA"
     
