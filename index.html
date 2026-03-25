@@ -71,7 +71,7 @@
             try {
                 // AQUI É ONDE SEU HTML CHAMA A "PONTE"
                 // Vamos usar uma URL de exemplo que depois substituiremos pela sua
-                const urlDaSuaAPI = `https://comparador-ebooks-dougdoindaias-projects.vercel.app/api/comparar?livro=${encodeURIComponent(livro)}`;
+                const urlDaSuaAPI = `/api/comparar?livro=${encodeURIComponent(livro)}`;
                 
                 const resposta = await fetch(urlDaSuaAPI);
                 const dados = await resposta.json();
