@@ -5,87 +5,113 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comparador de eBooks: BR x EUA</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            text-align: center;
-            padding: 50px;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            max-width: 500px;
-            margin: auto;
-        }
-        input {
-            width: 80%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #218838;
-        }
-        #resultado {
-            margin-top: 20px;
-            font-size: 1.2em;
-            font-weight: bold;
-        }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; text-align: center; padding: 20px; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 800px; margin: auto; }
+        input { width: 60%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; }
+        button { padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #218838; }
+        
+        /* Estilos da grade de livros */
+        .grid-livros { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-top: 20px; }
+        .cartao-livro { border: 1px solid #ddd; border-radius: 8px; padding: 10px; width: 150px; cursor: pointer; transition: transform 0.2s; background: #fff; }
+        .cartao-livro:hover { transform: scale(1.05); box-shadow: 0 4px 8px rgba(0,0,0,0.2); border-color: #28a745; }
+        .cartao-livro img { width: 100%; height: auto; border-radius: 4px; max-height: 200px; object-fit: contain; }
+        .cartao-livro h4 { font-size: 0.9em; margin: 10px 0 0 0; color: #333; height: 40px; overflow: hidden; }
+        
+        #area-resultado, #status { margin-top: 20px; font-size: 1.1em; }
+        .resultado-card { background: #f8f9fa; padding: 20px; border-radius: 8px; border: 2px solid #ddd; margin-top: 20px;}
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h2>📚 Comparador de eBooks</h2>
-        <p>Digite o nome do livro para comparar os preços (Amazon BR vs EUA)</p>
+        <h2>📚 Comparador de eBooks Inteligente</h2>
+        <p>Busque por título ou autor para comparar os preços do Kindle (BR vs EUA)</p>
         
-        <input type="text" id="nomeLivro" placeholder="Ex: Hábitos Atômicos">
-        <button onclick="buscarPrecos()">Comparar Preço</button>
+        <input type="text" id="termoBusca" placeholder="Ex: George Orwell 1984">
+        <button onclick="buscarLista()">Buscar Livros</button>
 
-        <div id="resultado"></div>
+        <div id="status"></div>
+        
+        <div id="vitrine" class="grid-livros"></div>
+
+        <div id="area-resultado"></div>
     </div>
 
     <script>
-        async function buscarPrecos() {
-            const livro = document.getElementById('nomeLivro').value;
-            const resultadoDiv = document.getElementById('resultado');
+        const statusDiv = document.getElementById('status');
+        const vitrineDiv = document.getElementById('vitrine');
+        const resultadoDiv = document.getElementById('area-resultado');
 
-            if (!livro) {
-                resultadoDiv.innerHTML = "<span style='color: red;'>Por favor, digite o nome de um livro.</span>";
-                return;
-            }
+        // ETAPA 1: Busca e exibe as capas
+        async function buscarLista() {
+            const termo = document.getElementById('termoBusca').value;
+            if (!termo) return;
 
-            resultadoDiv.innerHTML = "⏳ Buscando os melhores preços...";
+            statusDiv.innerHTML = "⏳ Procurando capas na Amazon...";
+            vitrineDiv.innerHTML = "";
+            resultadoDiv.innerHTML = "";
 
             try {
-                // AQUI É ONDE SEU HTML CHAMA A "PONTE"
-                // Vamos usar uma URL de exemplo que depois substituiremos pela sua
-                const urlDaSuaAPI = `/api/comparar?livro=${encodeURIComponent(livro)}`;
-                
-                const resposta = await fetch(urlDaSuaAPI);
+                const resposta = await fetch(`/api/buscar?q=${encodeURIComponent(termo)}`);
                 const dados = await resposta.json();
 
+                if (dados.erro || dados.length === 0) {
+                    statusDiv.innerHTML = "<span style='color: red;'>Nenhum livro digital encontrado.</span>";
+                    return;
+                }
+
+                statusDiv.innerHTML = "Clique na capa do livro para comparar os preços:";
+                
+                // Cria um cartão para cada livro encontrado
+                dados.forEach(livro => {
+                    const cartao = document.createElement('div');
+                    cartao.className = 'cartao-livro';
+                    // Ao clicar na capa, ele aciona a função de comparar usando o ASIN e o Título
+                    cartao.onclick = () => compararPrecos(livro.asin, livro.titulo);
+                    
+                    cartao.innerHTML = `
+                        <img src="${livro.imagem}" alt="Capa">
+                        <h4>${livro.titulo}</h4>
+                    `;
+                    vitrineDiv.appendChild(cartao);
+                });
+
+            } catch (erro) {
+                statusDiv.innerHTML = "<span style='color: red;'>Erro de conexão com o servidor.</span>";
+            }
+        }
+
+        // ETAPA 2: Compara os preços do livro selecionado
+        async function compararPrecos(asin, titulo) {
+            vitrineDiv.innerHTML = ""; // Esconde as capas
+            statusDiv.innerHTML = `⏳ Analisando os preços para: <b>${titulo}</b>... (Isso pode levar alguns segundos)`;
+
+            try {
+                const resposta = await fetch(`/api/comparar?asin=${asin}&titulo=${encodeURIComponent(titulo)}`);
+                const dados = await resposta.json();
+
+                statusDiv.innerHTML = ""; // Limpa a mensagem de carregando
+
+                if (dados.erro) {
+                    resultadoDiv.innerHTML = `<span style='color: orange;'>⚠️ ${dados.erro}</span>`;
+                    return;
+                }
+
                 resultadoDiv.innerHTML = `
-                    <p>🇧🇷 Preço no Brasil: R$ ${dados.preco_brasil_brl}</p>
-                    <p>🇺🇸 Preço nos EUA: U$ ${dados.preco_eua_usd} (R$ ${dados.preco_eua_convertido_brl})</p>
-                    <hr>
-                    <p style="color: ${dados.mais_viavel === 'Brasil' ? 'green' : 'blue'};">
-                        ✅ Mais viável comprar no: <b>${dados.mais_viavel}</b>
-                    </p>
+                    <div class="resultado-card">
+                        <h3>${dados.livro}</h3>
+                        <p>🇧🇷 <b>Brasil:</b> R$ ${dados.preco_brasil_brl}</p>
+                        <p>🇺🇸 <b>EUA:</b> U$ ${dados.preco_eua_usd} <span style="font-size: 0.8em; color: #666;">(R$ ${dados.preco_eua_convertido_brl} c/ taxas)</span></p>
+                        <hr>
+                        <h2 style="color: ${dados.mais_viavel === 'Brasil' ? '#28a745' : '#007bff'};">
+                            ✅ Compre na loja do: ${dados.mais_viavel}
+                        </h2>
+                    </div>
+                    <br><button onclick="document.getElementById('vitrine').innerHTML=''; document.getElementById('area-resultado').innerHTML=''; document.getElementById('status').innerHTML='';">Fazer Nova Busca</button>
                 `;
             } catch (erro) {
-                resultadoDiv.innerHTML = "<span style='color: red;'>Erro ao buscar os preços. O servidor pode estar offline.</span>";
+                statusDiv.innerHTML = "<span style='color: red;'>Erro ao comparar os preços.</span>";
             }
         }
     </script>

@@ -5,16 +5,20 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
-# Sua chave da Rainforest API
 API_KEY = "E26F264275FD4B31B4D33F1646CC3889"
 
-def buscar_preco_rainforest(livro, dominio):
-    # Parâmetros oficiais da documentação da Rainforest
+# Rota 1: Traz a lista de livros e capas
+@app.route('/api/buscar', methods=['GET'])
+def buscar_livros():
+    termo = request.args.get('q')
+    if not termo:
+        return jsonify({"erro": "Termo não fornecido"}), 400
+
     params = {
         'api_key': API_KEY,
         'type': 'search',
-        'amazon_domain': dominio,
-        'search_term': f"{livro} kindle", # Força a busca pela versão digital
+        'amazon_domain': 'amazon.com.br',
+        'search_term': f"{termo} kindle",
         'sort_by': 'relevance'
     }
     
@@ -22,45 +26,64 @@ def buscar_preco_rainforest(livro, dominio):
         resposta = requests.get('https://api.rainforestapi.com/request', params=params)
         dados = resposta.json()
         
-        # Pega o primeiro resultado da busca
-        if 'search_results' in dados and len(dados['search_results']) > 0:
-            resultado = dados['search_results'][0]
-            # Verifica se o item tem um preço listado
-            if 'price' in resultado:
-                return resultado['price']['value']
-        return None
+        resultados = []
+        # Pega os 6 primeiros resultados válidos
+        if 'search_results' in dados:
+            for item in dados['search_results'][:6]:
+                if 'asin' in item and 'title' in item:
+                    resultados.append({
+                        'titulo': item['title'],
+                        'imagem': item.get('image', ''), # Pega a URL da capa
+                        'asin': item['asin']
+                    })
+        return jsonify(resultados)
     except Exception as e:
-        return None
+        return jsonify({"erro": "Falha ao buscar os livros."}), 500
 
+# Função auxiliar para buscar o preço do produto exato (pelo ASIN)
+def buscar_preco_por_asin(asin, dominio):
+    params = {
+        'api_key': API_KEY,
+        'type': 'product',
+        'amazon_domain': dominio,
+        'asin': asin
+    }
+    try:
+        dados = requests.get('https://api.rainforestapi.com/request', params=params).json()
+        if 'product' in dados and 'buybox_winner' in dados['product']:
+            if 'price' in dados['product']['buybox_winner']:
+                return dados['product']['buybox_winner']['price']['value']
+        return None
+    except: return None
+
+# Rota 2: Compara os preços do livro selecionado
 @app.route('/api/comparar', methods=['GET'])
 def comparar():
-    livro = request.args.get('livro')
+    asin = request.args.get('asin')
+    titulo = request.args.get('titulo', 'Livro Selecionado')
     
-    if not livro:
-        return jsonify({"erro": "Nome do livro não fornecido"}), 400
+    if not asin:
+        return jsonify({"erro": "ASIN não fornecido"}), 400
 
-    # 1. Busca a cotação real e atualizada do dólar
+    # 1. Cotação
     try:
-        url_moeda = "https://api.exchangerate-api.com/v4/latest/USD"
-        resposta_moeda = requests.get(url_moeda)
-        cotacao = resposta_moeda.json()['rates']['BRL']
+        cotacao = requests.get("https://api.exchangerate-api.com/v4/latest/USD").json()['rates']['BRL']
     except:
-        cotacao = 5.00 # Valor de segurança caso a API de moeda falhe
+        cotacao = 5.00
 
-    # 2. Busca os preços reais na Amazon via Rainforest API
-    preco_br = buscar_preco_rainforest(livro, 'amazon.com.br')
-    preco_us_dolar = buscar_preco_rainforest(livro, 'amazon.com')
+    # 2. Busca preços exatos
+    preco_br = buscar_preco_por_asin(asin, 'amazon.com.br')
+    preco_us_dolar = buscar_preco_por_asin(asin, 'amazon.com')
     
-    # Validação caso não encontre o livro em alguma das lojas
     if preco_br is None or preco_us_dolar is None:
-        return jsonify({"erro": "Preço não encontrado. Tente digitar o nome mais completo do livro."}), 404
+        return jsonify({"erro": "Não foi possível encontrar o preço digital nas duas lojas."})
     
-    # 3. Faz a matemática (adicionando ~5% de IOF/Spread para compras internacionais)
+    # 3. Matemática
     preco_us_convertido = (preco_us_dolar * cotacao) * 1.05
     mais_barato = "Brasil" if preco_br <= preco_us_convertido else "EUA"
     
     return jsonify({
-        "livro": livro,
+        "livro": titulo,
         "preco_brasil_brl": round(preco_br, 2),
         "preco_eua_usd": round(preco_us_dolar, 2),
         "preco_eua_convertido_brl": round(preco_us_convertido, 2),
