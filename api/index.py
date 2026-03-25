@@ -15,19 +15,19 @@ def buscar_livros():
     if not termo:
         return jsonify({"erro": "Termo não fornecido"}), 400
 
+    # Removido o 'sort_by': 'relevance' que estava causando o bloqueio
     params = {
         'api_key': API_KEY,
         'type': 'search',
         'amazon_domain': 'amazon.com.br',
-        'search_term': f"{termo} kindle",
-        'sort_by': 'relevance'
+        'search_term': f"{termo} kindle"
     }
     
     try:
         resposta = requests.get('https://api.rainforestapi.com/request', params=params)
         dados = resposta.json()
         
-        # MODO DETETIVE: Se a API da Rainforest bloqueou o pedido (ex: limite de uso)
+        # MODO DETETIVE: Verifica se a Rainforest bloqueou
         if 'request_info' in dados and dados['request_info'].get('success') == False:
             mensagem = dados['request_info'].get('message', 'Erro desconhecido na API')
             return jsonify({"erro": f"Rainforest recusou: {mensagem}"})
@@ -63,9 +63,16 @@ def buscar_preco_por_asin(asin, dominio):
     }
     try:
         dados = requests.get('https://api.rainforestapi.com/request', params=params).json()
+        
+        # Tenta pegar o preço do quadro principal (buybox)
         if 'product' in dados and 'buybox_winner' in dados['product']:
             if 'price' in dados['product']['buybox_winner']:
                 return dados['product']['buybox_winner']['price']['value']
+                
+        # Fallback: tenta pegar o preço base alternativo caso o buybox não exista
+        if 'product' in dados and 'price' in dados['product']:
+            return dados['product']['price'].get('value')
+            
         return None
     except: 
         return None
