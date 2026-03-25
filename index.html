@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparador de eBooks: BR x EUA</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            text-align: center;
+            padding: 50px;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            max-width: 500px;
+            margin: auto;
+        }
+        input {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #resultado {
+            margin-top: 20px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>📚 Comparador de eBooks</h2>
+        <p>Digite o nome do livro para comparar os preços (Amazon BR vs EUA)</p>
+        
+        <input type="text" id="nomeLivro" placeholder="Ex: Hábitos Atômicos">
+        <button onclick="buscarPrecos()">Comparar Preço</button>
+
+        <div id="resultado"></div>
+    </div>
+
+    <script>
+        async function buscarPrecos() {
+            const livro = document.getElementById('nomeLivro').value;
+            const resultadoDiv = document.getElementById('resultado');
+
+            if (!livro) {
+                resultadoDiv.innerHTML = "<span style='color: red;'>Por favor, digite o nome de um livro.</span>";
+                return;
+            }
+
+            resultadoDiv.innerHTML = "⏳ Buscando os melhores preços...";
+
+            try {
+                // AQUI É ONDE SEU HTML CHAMA A "PONTE"
+                // Vamos usar uma URL de exemplo que depois substituiremos pela sua
+                const urlDaSuaAPI = `https://sua-api-na-nuvem.com/comparar?livro=${encodeURIComponent(livro)}`;
+                
+                const resposta = await fetch(urlDaSuaAPI);
+                const dados = await resposta.json();
+
+                resultadoDiv.innerHTML = `
+                    <p>🇧🇷 Preço no Brasil: R$ ${dados.preco_brasil_brl}</p>
+                    <p>🇺🇸 Preço nos EUA: U$ ${dados.preco_eua_usd} (R$ ${dados.preco_eua_convertido_brl})</p>
+                    <hr>
+                    <p style="color: ${dados.mais_viavel === 'Brasil' ? 'green' : 'blue'};">
+                        ✅ Mais viável comprar no: <b>${dados.mais_viavel}</b>
+                    </p>
+                `;
+            } catch (erro) {
+                resultadoDiv.innerHTML = "<span style='color: red;'>Erro ao buscar os preços. O servidor pode estar offline.</span>";
+            }
+        }
+    </script>
+
+</body>
+</html>
